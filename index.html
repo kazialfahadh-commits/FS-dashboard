@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Final Settlement (FS) Executive Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); border: 1px solid #e2e8f0; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .sort-header { cursor: pointer; user-select: none; }
+        .sort-header:hover { background-color: #e2e8f0; }
+    </style>
+</head>
+<body class="text-slate-800 antialiased">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-slate-900 text-white sticky top-0 z-50 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-indigo-600 rounded-lg">
+                    <i data-lucide="bar-chart-3" class="w-6 h-6 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight">Final Settlement Dashboard</h1>
+                    <p class="text-xs text-slate-400">Interactive Exit, Tenure & Grade Analytics</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-3">
+                <!-- Master Reset Button -->
+                <button id="masterResetBtn" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg shadow-sm transition flex items-center gap-2">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Reset to Base Data
+                </button>
+
+                <label class="flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg cursor-pointer transition shadow-sm">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    <span>Upload New Sheet (.xlsx)</span>
+                    <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" class="hidden">
+                </label>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+
+        <!-- Active Month / Filter Banner -->
+        <div id="activeMonthBanner" class="hidden bg-indigo-50 border border-indigo-200 text-indigo-900 px-4 py-3 rounded-xl flex items-center justify-between shadow-sm">
+            <div class="flex items-center space-x-2">
+                <i data-lucide="calendar" class="w-5 h-5 text-indigo-600"></i>
+                <span class="text-sm font-medium">Filtering Dashboard for Separation Month: <strong id="selectedMonthLabel" class="text-indigo-700"></strong></span>
+            </div>
+            <button id="clearMonthFilterBtn" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg font-semibold transition">
+                Deselect & Show All Months
+            </button>
+        </div>
+
+        <!-- Global Filters Panel -->
+        <div class="glass-card rounded-xl p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                    <i data-lucide="filter" class="w-4 h-4 text-indigo-500"></i> Global Filters
+                </h2>
+                <div class="flex items-center space-x-3">
+                    <button id="resetDataBtn" class="text-xs px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg border border-slate-300 transition flex items-center gap-1">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Clear Global Filters
+                    </button>
+                    <span id="recordCountBadge" class="text-xs px-2.5 py-1 bg-indigo-50 text-indigo-700 font-semibold rounded-full border border-indigo-200">
+                        Showing: 0 records
+                    </span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Start Separation Date</label>
+                    <input type="date" id="startDate" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">End Separation Date</label>
+                    <input type="date" id="endDate" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Employee Location</label>
+                    <select id="locationFilter" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="ALL">All Locations (Excl. Personal Driver)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Tenure Bracket</label>
+                    <select id="tenureFilter" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="ALL">All Service Lengths</option>
+                        <option value="< 1 Year">< 1 Year</option>
+                        <option value="1 - 3 Years">1 - 3 Years</option>
+                        <option value="3 - 5 Years">3 - 5 Years</option>
+                        <option value="5 - 10 Years">5 - 10 Years</option>
+                        <option value="10+ Years">10+ Years</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Salary Grade</label>
+                    <select id="gradeFilter" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="ALL">All Salary Grades</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPIs Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+            <div class="glass-card rounded-xl p-4 shadow-sm border-l-4 border-slate-600">
+                <p class="text-xs font-medium text-slate-500 uppercase">Total Separations</p>
+                <h3 id="kpiTotalSeparations" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
+                <p class="text-xs text-slate-400 mt-1">Total Exits</p>
+            </div>
+
+            <div class="glass-card rounded-xl p-4 shadow-sm border-l-4 border-cyan-500">
+                <p class="text-xs font-medium text-slate-500 uppercase">Clearance Received</p>
+                <h3 id="kpiClearanceReceived" class="text-2xl font-bold text-cyan-600 mt-1">0</h3>
+                <p id="kpiClearanceRate" class="text-xs text-cyan-600 font-semibold mt-1">0% Conversion</p>
+            </div>
+
+            <div class="glass-card rounded-xl p-4 shadow-sm border-l-4 border-amber-500">
+                <p class="text-xs font-medium text-slate-500 uppercase">Active WIP - HR</p>
+                <h3 id="kpiWipHR" class="text-2xl font-bold text-amber-600 mt-1">0</h3>
+                <p class="text-xs text-slate-400 mt-1">Pending Forward</p>
+            </div>
+
+            <div class="glass-card rounded-xl p-4 shadow-sm border-l-4 border-blue-500">
+                <p class="text-xs font-medium text-slate-500 uppercase">Active WIP - Accounts</p>
+                <h3 id="kpiWipFin" class="text-2xl font-bold text-blue-600 mt-1">0</h3>
+                <p class="text-xs text-slate-400 mt-1">Audit & Handover</p>
+            </div>
+
+            <div class="glass-card rounded-xl p-4 shadow-sm border-l-4 border-emerald-500">
+                <p class="text-xs font-medium text-slate-500 uppercase">Work Completed</p>
+                <h3 id="kpiWorkCompleted" class="text-2xl font-bold text-emerald-600 mt-1">0</h3>
+                <p id="kpiWorkCompletedRate" class="text-xs text-emerald-600 font-semibold mt-1">0% Complete</p>
+            </div>
+
+            <div class="glass-card rounded-xl p-4 shadow-sm border-l-4 border-rose-500">
+                <p class="text-xs font-medium text-slate-500 uppercase">Closed: Legal/Minus</p>
+                <h3 id="kpiClosedLegal" class="text-2xl font-bold text-rose-600 mt-1">0</h3>
+                <p class="text-xs text-slate-400 mt-1">Exception Cases</p>
+            </div>
+        </div>
+
+        <!-- SLA Banner with Interactive Location Tabs -->
+        <div class="glass-card rounded-xl p-6 shadow-sm bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-900 text-white space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-4 border-b border-indigo-800/60 pb-3">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-2">
+                    <i data-lucide="clock" class="w-4 h-4"></i> Average Turnaround Time (SLAs in Days)
+                </h3>
+                
+                <div class="flex flex-wrap gap-1 bg-slate-800/80 p-1 rounded-lg border border-slate-700 text-xs font-medium" id="slaLocationTabs">
+                    <button data-loc="ALL" class="sla-tab px-3 py-1 rounded-md bg-indigo-600 text-white shadow-sm">Overall</button>
+                    <button data-loc="CHQ" class="sla-tab px-3 py-1 rounded-md text-slate-300 hover:text-white">CHQ</button>
+                    <button data-loc="Field Force-Sales" class="sla-tab px-3 py-1 rounded-md text-slate-300 hover:text-white">Field Force-Sales</button>
+                    <button data-loc="Distribution" class="sla-tab px-3 py-1 rounded-md text-slate-300 hover:text-white">Distribution</button>
+                    <button data-loc="Tongi Plant" class="sla-tab px-3 py-1 rounded-md text-slate-300 hover:text-white">Tongi Plant</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div class="p-4 bg-indigo-900/40 rounded-xl border border-indigo-700/40">
+                    <p class="text-xs text-indigo-200 font-medium">Separation to Clearance</p>
+                    <span id="slaSepToClear" class="text-2xl font-bold text-white mt-1 block">0 Days</span>
+                </div>
+                <div class="p-4 bg-indigo-900/40 rounded-xl border border-indigo-700/40">
+                    <p class="text-xs text-indigo-200 font-medium">Clearance to Sent Accounts</p>
+                    <span id="slaClearToAcc" class="text-2xl font-bold text-white mt-1 block">0 Days</span>
+                </div>
+                <div class="p-4 bg-indigo-900/40 rounded-xl border border-indigo-700/40">
+                    <p class="text-xs text-indigo-200 font-medium">Accounts to Cheque Ready</p>
+                    <span id="slaAccToCheque" class="text-2xl font-bold text-white mt-1 block">0 Days</span>
+                </div>
+                <div class="p-4 bg-emerald-950/40 rounded-xl border border-emerald-700/40">
+                    <p class="text-xs text-emerald-200 font-medium">Total End-to-End SLA</p>
+                    <span id="slaTotal" class="text-2xl font-bold text-emerald-400 mt-1 block">0 Days</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Grid 1 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-card rounded-xl p-5 shadow-sm flex flex-col">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-base font-bold text-slate-800">Monthly Separation & Clearance Journey</h3>
+                    <span class="text-xs text-indigo-600 font-medium">💡 Click bar to toggle month</span>
+                </div>
+                <div class="relative flex-1 min-h-[300px]">
+                    <canvas id="monthlyTrendChart"></canvas>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-5 shadow-sm flex flex-col">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-base font-bold text-slate-800">Final Settlement Status Breakdown</h3>
+                </div>
+                <div class="relative flex-1 min-h-[300px] flex items-center justify-center">
+                    <canvas id="statusDistributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Grid 2: Tenure & Salary Grade -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-card rounded-xl p-5 shadow-sm">
+                <h3 class="text-base font-bold text-slate-800 mb-1">Tenure-Wise (Service Length) Status Breakdown</h3>
+                <p class="text-xs text-slate-500 mb-4">Separation Date − Joining Date</p>
+                <div class="relative min-h-[300px]">
+                    <canvas id="tenureChart"></canvas>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-5 shadow-sm">
+                <h3 class="text-base font-bold text-slate-800 mb-1">Salary Grade Status Breakdown</h3>
+                <p class="text-xs text-slate-500 mb-4">Distribution by Employee Salary Grade</p>
+                <div class="relative min-h-[300px]">
+                    <canvas id="gradeChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Grid 3: Location & Department -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-card rounded-xl p-5 shadow-sm">
+                <h3 class="text-base font-bold text-slate-800 mb-4">Location Matrix (Clearances & Statuses)</h3>
+                <div class="relative min-h-[300px]">
+                    <canvas id="locationChart"></canvas>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-5 shadow-sm">
+                <h3 class="text-base font-bold text-slate-800 mb-4">Top Departments Exit Distribution</h3>
+                <div class="relative min-h-[300px]">
+                    <canvas id="departmentChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table with Filter & Sorting Controls -->
+        <div class="glass-card rounded-xl p-5 shadow-sm space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <h3 class="text-base font-bold text-slate-800">Detailed Employee Records</h3>
+                
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- Status Table Filter -->
+                    <select id="tableStatusFilter" class="px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="ALL">All Statuses</option>
+                        <option value="Work Completed">Work Completed</option>
+                        <option value="Active WIP-HR">Active WIP-HR</option>
+                        <option value="Active WIP-Finance & Audit">Active WIP-Finance & Audit</option>
+                        <option value="Closed: Legal/ Minus">Closed: Legal/ Minus</option>
+                        <option value="Pending Clearance">Pending Clearance</option>
+                    </select>
+
+                    <!-- Search Input -->
+                    <div class="w-full sm:w-64">
+                        <input type="text" id="tableSearch" placeholder="Search Name, SAP Code, Grade..." class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto custom-scrollbar max-h-96 rounded-lg border border-slate-200">
+                <table class="w-full text-left text-sm text-slate-600">
+                    <thead class="bg-slate-100 text-xs font-semibold text-slate-700 uppercase sticky top-0 border-b border-slate-200">
+                        <tr>
+                            <th class="py-3 px-4 sort-header" data-sort="sapCode">SAP Code <span id="sort-sapCode">↕</span></th>
+                            <th class="py-3 px-4 sort-header" data-sort="name">Name <span id="sort-name">↕</span></th>
+                            <th class="py-3 px-4 sort-header" data-sort="location">Location <span id="sort-location">↕</span></th>
+                            <th class="py-3 px-4 sort-header" data-sort="grade">Grade <span id="sort-grade">↕</span></th>
+                            <th class="py-3 px-4 sort-header" data-sort="tenureYears">Tenure <span id="sort-tenureYears">↕</span></th>
+                            <th class="py-3 px-4 sort-header" data-sort="sepDate">Separation Date <span id="sort-sepDate">↕</span></th>
+                            <th class="py-3 px-4 sort-header" data-sort="status">Status <span id="sort-status">↕</span></th>
+                            <th class="py-3 px-4 sort-header" data-sort="slaTotal">SLA Days <span id="sort-slaTotal">↕</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody" class="divide-y divide-slate-200 bg-white">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // State Variables
+        let rawData = [];
+        let filteredData = [];
+        let selectedMonthFilter = null;
+        let activeSlaLocation = 'ALL';
+        let sortCol = 'sepDate';
+        let sortAsc = false;
+        let charts = {};
+
+        // DOM Elements
+        const masterResetBtn = document.getElementById('masterResetBtn');
+        const fileInput = document.getElementById('fileInput');
+        const startDateInput = document.getElementById('startDate');
+        const endDateInput = document.getElementById('endDate');
+        const locationFilter = document.getElementById('locationFilter');
+        const tenureFilter = document.getElementById('tenureFilter');
+        const gradeFilter = document.getElementById('gradeFilter');
+        const resetDataBtn = document.getElementById('resetDataBtn');
+        const tableSearch = document.getElementById('tableSearch');
+        const tableStatusFilter = document.getElementById('tableStatusFilter');
+        const activeMonthBanner = document.getElementById('activeMonthBanner');
+        const selectedMonthLabel = document.getElementById('selectedMonthLabel');
+        const clearMonthFilterBtn = document.getElementById('clearMonthFilterBtn');
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            setupEventListeners();
+            autoFetchDefaultExcel();
+        });
+
+        // Automatic fetch logic on page load
+        function autoFetchDefaultExcel() {
+            const fileName = 'Final Settlement Master data 2022 to 2026 (For HTML Dashboard).xlsx';
+            fetch(fileName)
+                .then(res => {
+                    if (!res.ok) throw new Error("Base file not found automatically.");
+                    return res.arrayBuffer();
+                })
+                .then(buffer => {
+                    const data = new Uint8Array(buffer);
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: false });
+                    const sheetName = workbook.SheetNames.includes('FS 2026') ? 'FS 2026' : workbook.SheetNames[0];
+                    const sheet = workbook.Sheets[sheetName];
+                    const json = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: true });
+                    processRawData(json);
+                })
+                .catch(err => {
+                    console.log("Auto-load note: Place the Excel file in the same directory as this HTML file to auto-preload dashboard data.", err);
+                });
+        }
+
+        function setupEventListeners() {
+            masterResetBtn.addEventListener('click', masterReset);
+            resetDataBtn.addEventListener('click', resetFilters);
+            fileInput.addEventListener('change', handleFileUpload);
+            startDateInput.addEventListener('change', applyFilters);
+            endDateInput.addEventListener('change', applyFilters);
+            locationFilter.addEventListener('change', applyFilters);
+            tenureFilter.addEventListener('change', applyFilters);
+            gradeFilter.addEventListener('change', applyFilters);
+            tableSearch.addEventListener('input', renderTable);
+            tableStatusFilter.addEventListener('change', renderTable);
+
+            clearMonthFilterBtn.addEventListener('click', () => {
+                selectedMonthFilter = null;
+                activeMonthBanner.classList.add('hidden');
+                applyFilters();
+            });
+
+            // SLA Location Tabs
+            document.querySelectorAll('.sla-tab').forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    document.querySelectorAll('.sla-tab').forEach(t => {
+                        t.className = 'sla-tab px-3 py-1 rounded-md text-slate-300 hover:text-white';
+                    });
+                    e.target.className = 'sla-tab px-3 py-1 rounded-md bg-indigo-600 text-white shadow-sm';
+                    activeSlaLocation = e.target.getAttribute('data-loc');
+                    updateSLABanner();
+                });
+            });
+
+            // Table Header Sorting
+            document.querySelectorAll('.sort-header').forEach(header => {
+                header.addEventListener('click', (e) => {
+                    const col = e.currentTarget.getAttribute('data-sort');
+                    if (sortCol === col) {
+                        sortAsc = !sortAsc;
+                    } else {
+                        sortCol = col;
+                        sortAsc = true;
+                    }
+                    updateSortIcons();
+                    renderTable();
+                });
+            });
+        }
+
+        // Master Reset Function (Top Header Button)
+        function masterReset() {
+            startDateInput.value = '';
+            endDateInput.value = '';
+            locationFilter.value = 'ALL';
+            tenureFilter.value = 'ALL';
+            gradeFilter.value = 'ALL';
+            tableSearch.value = '';
+            tableStatusFilter.value = 'ALL';
+            selectedMonthFilter = null;
+            activeSlaLocation = 'ALL';
+
+            // Reset SLA Location Tabs UI
+            document.querySelectorAll('.sla-tab').forEach(t => {
+                t.className = 'sla-tab px-3 py-1 rounded-md text-slate-300 hover:text-white';
+            });
+            document.querySelector('.sla-tab[data-loc="ALL"]').className = 'sla-tab px-3 py-1 rounded-md bg-indigo-600 text-white shadow-sm';
+
+            activeMonthBanner.classList.add('hidden');
+            sortCol = 'sepDate';
+            sortAsc = false;
+            updateSortIcons();
+
+            applyFilters();
+        }
+
+        function resetFilters() {
+            masterReset();
+        }
+
+        function updateSortIcons() {
+            document.querySelectorAll('[id^="sort-"]').forEach(el => el.innerText = '↕');
+            const targetIcon = document.getElementById(`sort-${sortCol}`);
+            if (targetIcon) {
+                targetIcon.innerText = sortAsc ? '↑' : '↓';
+            }
+        }
+
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const data = new Uint8Array(evt.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: false });
+                    const sheetName = workbook.SheetNames.includes('FS 2026') ? 'FS 2026' : workbook.SheetNames[0];
+                    const sheet = workbook.Sheets[sheetName];
+                    
+                    const json = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: true });
+                    processRawData(json);
+                } catch (err) {
+                    alert('Error parsing Excel file. Please ensure it is a valid Final Settlement spreadsheet.');
+                    console.error(err);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processRawData(json) {
+            rawData = [];
+            json.forEach(row => {
+                const loc = String(row['Employee Status (Location Wise)'] || row['Location'] || '').trim();
+                const sap = String(row['SAP Code'] || '').trim();
+                
+                if (!sap || loc.toLowerCase() === 'personal driver' || sap.toLowerCase() === 'sap code') return;
+
+                const isClearanceReceived = checkClearanceReceived(row);
+                const status = calculateStatus(row, isClearanceReceived);
+                
+                const joinD = parseDateUniversal(row['Joining Date']);
+                const sepD = parseDateUniversal(row['Separation Date']);
+                const clearD = parseDateUniversal(row['Clearence Received Date']);
+                const accD = parseDateUniversal(row['FS File Sent to Accounts (Date)']);
+                const chqD = parseDateUniversal(row['Cheque/Cash Ready Date'] || row['Cheque/Cash Delivery Date']);
+
+                const tenureInfo = calculateTenureBracket(joinD, sepD);
+
+                rawData.push({
+                    sapCode: sap,
+                    name: row['Employee Name'] || 'N/A',
+                    designation: row['Designation'] || 'N/A',
+                    department: row['Department'] || 'Unknown',
+                    location: loc || 'Other',
+                    empType: row['Type of Employee'] || 'Other',
+                    grade: String(row['Salary Grade'] || 'Other').trim(),
+                    joinDate: joinD,
+                    sepDate: sepD,
+                    tenureYears: tenureInfo.years,
+                    tenureBracket: tenureInfo.bracket,
+                    clearanceDate: clearD,
+                    clearanceReceived: isClearanceReceived,
+                    sentAccountsDate: accD,
+                    chequeReadyDate: chqD,
+                    status: status,
+                    slaSepToClear: calcDiffInDays(sepD, clearD),
+                    slaClearToAcc: calcDiffInDays(clearD, accD),
+                    slaAccToCheque: calcDiffInDays(accD, chqD),
+                    slaTotal: calcDiffInDays(sepD, chqD)
+                });
+            });
+
+            populateFilterDropdowns();
+            applyFilters();
+        }
+
+        function calculateTenureBracket(joinStr, sepStr) {
+            if (!joinStr || !sepStr) return { years: 0, bracket: 'Unknown' };
+            const j = new Date(joinStr + 'T00:00:00');
+            const s = new Date(sepStr + 'T00:00:00');
+            if (isNaN(j.getTime()) || isNaN(s.getTime())) return { years: 0, bracket: 'Unknown' };
+
+            const diffDays = Math.round((s - j) / (1000 * 60 * 60 * 24));
+            const years = +(diffDays / 365.25).toFixed(2);
+
+            let bracket = '10+ Years';
+            if (years < 1) bracket = '< 1 Year';
+            else if (years <= 3) bracket = '1 - 3 Years';
+            else if (years <= 5) bracket = '3 - 5 Years';
+            else if (years <= 10) bracket = '5 - 10 Years';
+
+            return { years: years >= 0 ? years : 0, bracket: bracket };
+        }
+
+        function checkClearanceReceived(row) {
+            const deptClear = String(row['Departmental Clearance (yes/No)'] || '').toLowerCase().trim();
+            const clearDate = row['Clearence Received Date'];
+            return ['yes', 'y'].includes(deptClear) || (clearDate !== undefined && clearDate !== null && String(clearDate).trim() !== '' && String(clearDate).trim() !== 'NaT');
+        }
+
+        function calculateStatus(row, isClearanceReceived) {
+            const npMinus = String(row['NP Minus File/ Zero File'] || '').trim();
+            const minusLegal = String(row['Minus File/ Legal Hand'] || '').trim();
+            const cqHandover = String(row['FS CQ Handover to Emp By ACC (Yes/No)'] || '').toLowerCase().trim();
+            const sentAccDate = row['FS File Sent to Accounts (Date)'];
+
+            if (npMinus !== '' || minusLegal !== '') return 'Closed: Legal/ Minus';
+
+            const completedKeywords = ['ready for cash payment', 'paid', 'ready', 'zero'];
+            if (completedKeywords.some(k => cqHandover.includes(k))) return 'Work Completed';
+
+            if (sentAccDate !== undefined && sentAccDate !== null && String(sentAccDate).trim() !== '' && String(sentAccDate).trim() !== 'NaT') {
+                return 'Active WIP-Finance & Audit';
+            }
+
+            if (isClearanceReceived) return 'Active WIP-HR';
+
+            return 'Pending Clearance';
+        }
+
+        function parseDateUniversal(val) {
+            if (val === undefined || val === null || val === '') return null;
+
+            if (typeof val === 'number') {
+                const jsDate = new Date(Math.round((val - 25569) * 86400 * 1000));
+                if (!isNaN(jsDate.getTime())) {
+                    const y = jsDate.getUTCFullYear();
+                    const m = String(jsDate.getUTCMonth() + 1).padStart(2, '0');
+                    const d = String(jsDate.getUTCDate()).padStart(2, '0');
+                    return `${y}-${m}-${d}`;
+                }
+            }
+
+            if (val instanceof Date && !isNaN(val.getTime())) {
+                const y = val.getFullYear();
+                const m = String(val.getMonth() + 1).padStart(2, '0');
+                const d = String(val.getDate()).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            }
+
+            const s = String(val).trim();
+            if (!s || s.toLowerCase() === 'nat') return null;
+
+            let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+            if (m) {
+                return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+            }
+
+            m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+            if (m) {
+                return `${m[3]}-${String(m[1]).padStart(2, '0')}-${String(m[2]).padStart(2, '0')}`;
+            }
+
+            return null;
+        }
+
+        function calcDiffInDays(startStr, endStr) {
+            if (!startStr || !endStr) return null;
+            const s = new Date(startStr + 'T00:00:00');
+            const e = new Date(endStr + 'T00:00:00');
+            if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+            return Math.round((e - s) / (1000 * 60 * 60 * 24));
+        }
+
+        function populateFilterDropdowns() {
+            const locations = [...new Set(rawData.map(d => d.location))].sort();
+            const grades = [...new Set(rawData.map(d => d.grade))].sort();
+
+            locationFilter.innerHTML = '<option value="ALL">All Locations (Excl. Personal Driver)</option>';
+            locations.forEach(loc => { if(loc) locationFilter.innerHTML += `<option value="${loc}">${loc}</option>`; });
+
+            gradeFilter.innerHTML = '<option value="ALL">All Salary Grades</option>';
+            grades.forEach(g => { if(g) gradeFilter.innerHTML += `<option value="${g}">${g}</option>`; });
+        }
+
+        function applyFilters() {
+            const start = startDateInput.value;
+            const end = endDateInput.value;
+            const selectedLoc = locationFilter.value;
+            const selectedTenure = tenureFilter.value;
+            const selectedGrade = gradeFilter.value;
+
+            filteredData = rawData.filter(d => {
+                if (start && d.sepDate && d.sepDate < start) return false;
+                if (end && d.sepDate && d.sepDate > end) return false;
+                if (selectedLoc !== 'ALL' && d.location !== selectedLoc) return false;
+                if (selectedTenure !== 'ALL' && d.tenureBracket !== selectedTenure) return false;
+                if (selectedGrade !== 'ALL' && d.grade !== selectedGrade) return false;
+                if (selectedMonthFilter && d.sepDate && !d.sepDate.startsWith(selectedMonthFilter)) return false;
+                return true;
+            });
+
+            document.getElementById('recordCountBadge').innerText = `Showing: ${filteredData.length} records`;
+
+            updateKPIs();
+            updateSLABanner();
+            renderCharts();
+            renderTable();
+        }
+
+        function updateKPIs() {
+            const total = filteredData.length;
+            const clearanceRec = filteredData.filter(d => d.clearanceReceived).length;
+            const wipHR = filteredData.filter(d => d.status === 'Active WIP-HR').length;
+            const wipFin = filteredData.filter(d => d.status === 'Active WIP-Finance & Audit').length;
+            const completed = filteredData.filter(d => d.status === 'Work Completed').length;
+            const closedLegal = filteredData.filter(d => d.status === 'Closed: Legal/ Minus').length;
+
+            document.getElementById('kpiTotalSeparations').innerText = total;
+            document.getElementById('kpiClearanceReceived').innerText = clearanceRec;
+            document.getElementById('kpiWipHR').innerText = wipHR;
+            document.getElementById('kpiWipFin').innerText = wipFin;
+            document.getElementById('kpiWorkCompleted').innerText = completed;
+            document.getElementById('kpiClosedLegal').innerText = closedLegal;
+
+            const clearanceRate = total > 0 ? ((clearanceRec / total) * 100).toFixed(1) : 0;
+            document.getElementById('kpiClearanceRate').innerText = `${clearanceRate}% Conversion`;
+
+            const completionRate = total > 0 ? ((completed / total) * 100).toFixed(1) : 0;
+            document.getElementById('kpiWorkCompletedRate').innerText = `${completionRate}% Completion Rate`;
+        }
+
+        function updateSLABanner() {
+            let dataForSLA = filteredData;
+            if (activeSlaLocation !== 'ALL') {
+                dataForSLA = filteredData.filter(d => d.location === activeSlaLocation);
+            }
+
+            document.getElementById('slaSepToClear').innerText = `${calcAvg(dataForSLA.map(d => d.slaSepToClear))} Days`;
+            document.getElementById('slaClearToAcc').innerText = `${calcAvg(dataForSLA.map(d => d.slaClearToAcc))} Days`;
+            document.getElementById('slaAccToCheque').innerText = `${calcAvg(dataForSLA.map(d => d.slaAccToCheque))} Days`;
+            document.getElementById('slaTotal').innerText = `${calcAvg(dataForSLA.map(d => d.slaTotal))} Days`;
+        }
+
+        function calcAvg(arr) {
+            const valid = arr.filter(v => v !== null && !isNaN(v));
+            if (valid.length === 0) return "0.00";
+            return (valid.reduce((a, b) => a + b, 0) / valid.length).toFixed(2);
+        }
+
+        function renderCharts() {
+            renderMonthlyTrendChart();
+            renderStatusDistributionChart();
+            renderTenureChart();
+            renderGradeChart();
+            renderLocationChart();
+            renderDepartmentChart();
+        }
+
+        function renderMonthlyTrendChart() {
+            const monthsMap = {};
+            const baseDataForMonths = rawData.filter(d => {
+                if (locationFilter.value !== 'ALL' && d.location !== locationFilter.value) return false;
+                if (tenureFilter.value !== 'ALL' && d.tenureBracket !== tenureFilter.value) return false;
+                if (gradeFilter.value !== 'ALL' && d.grade !== gradeFilter.value) return false;
+                return true;
+            });
+
+            baseDataForMonths.forEach(d => {
+                if (d.sepDate) {
+                    const monthKey = d.sepDate.substring(0, 7);
+                    if (!monthsMap[monthKey]) {
+                        monthsMap[monthKey] = { total: 0, clearance: 0, completed: 0 };
+                    }
+                    monthsMap[monthKey].total++;
+                    if (d.clearanceReceived) monthsMap[monthKey].clearance++;
+                    if (d.status === 'Work Completed') monthsMap[monthKey].completed++;
+                }
+            });
+
+            const sortedMonths = Object.keys(monthsMap).sort();
+
+            const getBgColors = (baseColor) => {
+                return sortedMonths.map(m => {
+                    if (!selectedMonthFilter || selectedMonthFilter === m) return baseColor;
+                    return baseColor + '33';
+                });
+            };
+
+            if (charts.monthlyTrend) charts.monthlyTrend.destroy();
+
+            const ctx = document.getElementById('monthlyTrendChart').getContext('2d');
+            charts.monthlyTrend = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedMonths,
+                    datasets: [
+                        { label: 'Total Separated', data: sortedMonths.map(m => monthsMap[m].total), backgroundColor: getBgColors('#94a3b8') },
+                        { label: 'Clearance Received', data: sortedMonths.map(m => monthsMap[m].clearance), backgroundColor: getBgColors('#06b6d4') },
+                        { label: 'Work Completed', data: sortedMonths.map(m => monthsMap[m].completed), backgroundColor: getBgColors('#10b981') }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (e, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const clickedMonth = sortedMonths[index];
+
+                            if (selectedMonthFilter === clickedMonth) {
+                                selectedMonthFilter = null;
+                                activeMonthBanner.classList.add('hidden');
+                            } else {
+                                selectedMonthFilter = clickedMonth;
+                                selectedMonthLabel.innerText = selectedMonthFilter;
+                                activeMonthBanner.classList.remove('hidden');
+                            }
+                            applyFilters();
+                        }
+                    },
+                    plugins: { legend: { position: 'top' } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+
+        function renderStatusDistributionChart() {
+            const statusCounts = {
+                'Work Completed': 0,
+                'Active WIP-HR': 0,
+                'Active WIP-Finance & Audit': 0,
+                'Closed: Legal/ Minus': 0,
+                'Pending Clearance': 0
+            };
+
+            filteredData.forEach(d => {
+                if (statusCounts[d.status] !== undefined) statusCounts[d.status]++;
+            });
+
+            if (charts.statusDist) charts.statusDist.destroy();
+
+            const ctx = document.getElementById('statusDistributionChart').getContext('2d');
+            charts.statusDist = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(statusCounts),
+                    datasets: [{
+                        data: Object.values(statusCounts),
+                        backgroundColor: ['#10b981', '#f59e0b', '#3b82f6', '#f43f5e', '#cbd5e1']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        function renderTenureChart() {
+            const brackets = ['< 1 Year', '1 - 3 Years', '3 - 5 Years', '5 - 10 Years', '10+ Years'];
+            const bracketMap = {};
+
+            brackets.forEach(b => {
+                bracketMap[b] = { completed: 0, wip: 0, closed: 0, pending: 0 };
+            });
+
+            filteredData.forEach(d => {
+                const b = bracketMap[d.tenureBracket] ? d.tenureBracket : null;
+                if (b) {
+                    if (d.status === 'Work Completed') bracketMap[b].completed++;
+                    else if (d.status.includes('Active WIP')) bracketMap[b].wip++;
+                    else if (d.status.includes('Closed')) bracketMap[b].closed++;
+                    else bracketMap[b].pending++;
+                }
+            });
+
+            if (charts.tenureChart) charts.tenureChart.destroy();
+
+            const ctx = document.getElementById('tenureChart').getContext('2d');
+            charts.tenureChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: brackets,
+                    datasets: [
+                        { label: 'Work Completed', data: brackets.map(b => bracketMap[b].completed), backgroundColor: '#10b981' },
+                        { label: 'Active WIP', data: brackets.map(b => bracketMap[b].wip), backgroundColor: '#f59e0b' },
+                        { label: 'Closed: Legal/Minus', data: brackets.map(b => bracketMap[b].closed), backgroundColor: '#f43f5e' },
+                        { label: 'Pending Clearance', data: brackets.map(b => bracketMap[b].pending), backgroundColor: '#cbd5e1' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
+                }
+            });
+        }
+
+        function renderGradeChart() {
+            const gradeMap = {};
+
+            filteredData.forEach(d => {
+                const g = d.grade || 'Other';
+                if (!gradeMap[g]) gradeMap[g] = 0;
+                gradeMap[g]++;
+            });
+
+            const topGrades = Object.entries(gradeMap)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 8)
+                .map(x => x[0]);
+
+            const gradeStatusMap = {};
+            topGrades.forEach(g => {
+                gradeStatusMap[g] = { completed: 0, wip: 0, closed: 0, pending: 0 };
+            });
+
+            filteredData.forEach(d => {
+                if (gradeStatusMap[d.grade]) {
+                    if (d.status === 'Work Completed') gradeStatusMap[d.grade].completed++;
+                    else if (d.status.includes('Active WIP')) gradeStatusMap[d.grade].wip++;
+                    else if (d.status.includes('Closed')) gradeStatusMap[d.grade].closed++;
+                    else gradeStatusMap[d.grade].pending++;
+                }
+            });
+
+            if (charts.gradeChart) charts.gradeChart.destroy();
+
+            const ctx = document.getElementById('gradeChart').getContext('2d');
+            charts.gradeChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: topGrades,
+                    datasets: [
+                        { label: 'Work Completed', data: topGrades.map(g => gradeStatusMap[g].completed), backgroundColor: '#10b981' },
+                        { label: 'Active WIP', data: topGrades.map(g => gradeStatusMap[g].wip), backgroundColor: '#f59e0b' },
+                        { label: 'Closed: Legal/Minus', data: topGrades.map(g => gradeStatusMap[g].closed), backgroundColor: '#f43f5e' },
+                        { label: 'Pending Clearance', data: topGrades.map(g => gradeStatusMap[g].pending), backgroundColor: '#cbd5e1' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
+                }
+            });
+        }
+
+        function renderLocationChart() {
+            const locMap = {};
+            filteredData.forEach(d => {
+                const loc = d.location || 'Other';
+                if (!locMap[loc]) {
+                    locMap[loc] = { clearance: 0, completed: 0, wip: 0, closed: 0 };
+                }
+                if (d.clearanceReceived) locMap[loc].clearance++;
+                if (d.status === 'Work Completed') locMap[loc].completed++;
+                else if (d.status.includes('Active WIP')) locMap[loc].wip++;
+                else if (d.status.includes('Closed')) locMap[loc].closed++;
+            });
+
+            const labels = Object.keys(locMap);
+            if (charts.locationChart) charts.locationChart.destroy();
+
+            const ctx = document.getElementById('locationChart').getContext('2d');
+            charts.locationChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Clearance Received', data: labels.map(l => locMap[l].clearance), backgroundColor: '#06b6d4' },
+                        { label: 'Work Completed', data: labels.map(l => locMap[l].completed), backgroundColor: '#10b981' },
+                        { label: 'Active WIP', data: labels.map(l => locMap[l].wip), backgroundColor: '#f59e0b' },
+                        { label: 'Closed: Legal/Minus', data: labels.map(l => locMap[l].closed), backgroundColor: '#f43f5e' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+
+        function renderDepartmentChart() {
+            const deptCounts = {};
+            filteredData.forEach(d => {
+                const dept = d.department || 'Unknown';
+                deptCounts[dept] = (deptCounts[dept] || 0) + 1;
+            });
+
+            const sortedDepts = Object.entries(deptCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 7);
+
+            if (charts.deptChart) charts.deptChart.destroy();
+
+            const ctx = document.getElementById('departmentChart').getContext('2d');
+            charts.deptChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedDepts.map(d => d[0]),
+                    datasets: [{
+                        label: 'Separation Count',
+                        data: sortedDepts.map(d => d[1]),
+                        backgroundColor: '#6366f1'
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('dataTableBody');
+            const search = tableSearch.value.toLowerCase();
+            const statusFilter = tableStatusFilter.value;
+
+            let records = filteredData.filter(d => {
+                if (statusFilter !== 'ALL' && d.status !== statusFilter) return false;
+
+                return String(d.sapCode).toLowerCase().includes(search) ||
+                       String(d.name).toLowerCase().includes(search) ||
+                       String(d.location).toLowerCase().includes(search) ||
+                       String(d.grade).toLowerCase().includes(search) ||
+                       String(d.department).toLowerCase().includes(search);
+            });
+
+            // Sorting logic
+            records.sort((a, b) => {
+                let valA = a[sortCol];
+                let valB = b[sortCol];
+
+                if (valA === null || valA === undefined) valA = '';
+                if (valB === null || valB === undefined) valB = '';
+
+                if (typeof valA === 'number' && typeof valB === 'number') {
+                    return sortAsc ? valA - valB : valB - valA;
+                }
+
+                valA = String(valA).toLowerCase();
+                valB = String(valB).toLowerCase();
+
+                if (valA < valB) return sortAsc ? -1 : 1;
+                if (valA > valB) return sortAsc ? 1 : -1;
+                return 0;
+            });
+
+            tbody.innerHTML = '';
+
+            records.slice(0, 100).forEach(d => {
+                let badgeClass = 'bg-slate-100 text-slate-700';
+                if (d.status === 'Work Completed') badgeClass = 'bg-emerald-100 text-emerald-800';
+                else if (d.status === 'Active WIP-HR') badgeClass = 'bg-amber-100 text-amber-800';
+                else if (d.status === 'Active WIP-Finance & Audit') badgeClass = 'bg-blue-100 text-blue-800';
+                else if (d.status.includes('Closed')) badgeClass = 'bg-rose-100 text-rose-800';
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition-colors';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-semibold text-slate-800">${d.sapCode}</td>
+                    <td class="py-3 px-4">${d.name}</td>
+                    <td class="py-3 px-4">${d.location}</td>
+                    <td class="py-3 px-4 font-medium text-slate-700">${d.grade}</td>
+                    <td class="py-3 px-4 font-medium text-indigo-700">${d.tenureBracket} (${d.tenureYears} yrs)</td>
+                    <td class="py-3 px-4">${d.sepDate || '-'}</td>
+                    <td class="py-3 px-4"><span class="px-2.5 py-1 text-xs font-semibold rounded-full ${badgeClass}">${d.status}</span></td>
+                    <td class="py-3 px-4 font-mono">${d.slaTotal !== null ? d.slaTotal + ' d' : '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    </script>
+</body>
+</html>
